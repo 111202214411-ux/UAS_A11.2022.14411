@@ -2,12 +2,32 @@ import streamlit as st
 import pandas as pd
 import joblib
 
-# Load model dan preprocessor
-model = joblib.load('best_churn_model.pkl')
-preprocessor = joblib.load('preprocessor.pkl')
+# 1. Konfigurasi Halaman Dasar
+st.set_page_config(page_title="Customer Retention Analysis", layout="centered")
 
-st.title("Aplikasi Prediksi Churn Pelanggan 📊")
-st.write("Masukkan data pelanggan di bawah ini untuk melihat prediksi.")
+# 2. Menyembunyikan menu bawaan Streamlit agar terlihat seperti Web App kustom
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
+
+# Load model dan preprocessor (ditambah cache agar lebih cepat saat reload)
+@st.cache_resource
+def load_objects():
+    model = joblib.load('best_churn_model.pkl')
+    preprocessor = joblib.load('preprocessor.pkl')
+    return model, preprocessor
+
+model, preprocessor = load_objects()
+
+# Judul dan Deskripsi yang lebih profesional
+st.title("Sistem Analisis Retensi Pelanggan")
+st.markdown("Silakan lengkapi parameter data pelanggan berikut untuk mengevaluasi risiko churn.")
+st.divider()
 
 # ===== Data Demografi =====
 st.subheader("Data Demografi")
@@ -18,7 +38,7 @@ with col1:
     country = st.text_input("Negara", value="Indonesia")
 with col2:
     city = st.text_input("Kota", value="Jakarta")
-    is_premium_user = st.selectbox("Premium User?", [0, 1])
+    is_premium_user = st.selectbox("Premium User", [0, 1])
 
 # ===== Aktivitas =====
 st.subheader("Aktivitas Pelanggan")
@@ -64,7 +84,9 @@ with col2:
     subscription_type = st.selectbox("Tipe Subscription", ["Free", "Basic", "Premium"])
     payment_method = st.selectbox("Metode Pembayaran", ["Credit Card", "Debit Card", "E-Wallet", "Bank Transfer"])
 
-if st.button("Prediksi", type="primary"):
+st.write("") # Memberi sedikit jarak sebelum tombol
+
+if st.button("Jalankan Prediksi", type="primary", use_container_width=True):
     input_data = pd.DataFrame([{
         'gender': gender,
         'age': age,
@@ -96,12 +118,21 @@ if st.button("Prediksi", type="primary"):
     input_preprocessed = preprocessor.transform(input_data)
     prediction = model.predict(input_preprocessed)
 
-    # Tampilkan probabilitas kalau ada
-    if hasattr(model, 'predict_proba'):
-        proba = model.predict_proba(input_preprocessed)[0]
-        st.write(f"Probabilitas Churn: **{proba[1]*100:.2f}%**")
+    st.divider()
+    st.subheader("Hasil Evaluasi")
 
-    if prediction[0] == 1:
-        st.error("Pelanggan berpotensi CHURN (Berhenti Berlangganan) 🔴")
-    else:
-        st.success("Pelanggan Tetap AKTIF (Setia) 🟢")
+    # Menggunakan kolom metrik untuk hasil yang lebih bersih
+    res_col1, res_col2 = st.columns(2)
+    
+    with res_col1:
+        if hasattr(model, 'predict_proba'):
+            proba = model.predict_proba(input_preprocessed)[0]
+            st.metric(label="Probabilitas Churn", value=f"{proba[1]*100:.2f}%")
+        else:
+            st.metric(label="Probabilitas Churn", value="N/A")
+
+    with res_col2:
+        if prediction[0] == 1:
+            st.error("Status: Risiko Tinggi (Berpotensi Churn)")
+        else:
+            st.success("Status: Aman (Pelanggan Aktif)")
